@@ -181,7 +181,9 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
                 continue
 
             # --- E. VERDUGO EJECUTA (si hay señal) ---
-            if accion in ["BUY", "SELL"] and confianza >= 50:
+            if (
+                accion in ["BUY", "SELL"] and confianza >= 60
+            ):  # 🎯 60% umbral para test 48h
                 print(f"\n🛡️ GUARDIÁN: Validando orden de {accion}...")
 
                 # Construir solicitud formal para el Guardián
@@ -195,7 +197,7 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
                     symbol="BTCUSDT",
                     side=OrderSide.BUY if accion == "BUY" else OrderSide.SELL,
                     quantity=round(cantidad_estimada, 6),
-                    leverage=5,  # 🔥 Apalancamiento x5 para test 48h
+                    leverage=settings.max_leverage,  # 📈 Lee de config (default 5x)
                     stop_loss_pct=settings.stop_loss_pct,
                     take_profit_pct=settings.stop_loss_pct * 1.5,
                     confidence=confianza / 100,

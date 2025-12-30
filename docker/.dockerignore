@@ -1,0 +1,14 @@
+# Archivos a ignorar durante el deploy
+__pycache__/
+*.py[cod]
+venv/
+.env
+*.log
+.git/
+tests/
+docs/
+notebooks/
+scripts/
+tools/
+*.db
+*.sqlite

@@ -1,0 +1,116 @@
+# ═══════════════════════════════════════════════════════════
+# HYDRA V2 - GITIGNORE
+# Solo sube a GitHub lo que los usuarios necesitan
+# ═══════════════════════════════════════════════════════════
+
+# ═══ CREDENCIALES (CRÍTICO - NUNCA SUBIR) ═══
+.env
+*.env
+.env.*
+!.env.example
+secrets.json
+credentials.json
+.version
+
+# ═══ Configuración de Despliegue (Personal) ═══
+fly.toml
+Procfile
+runtime.txt
+
+# ═══ Logs y Archivos Temporales ═══
+logs_*.txt
+logs.txt
+*.log
+docs/logs/
+PROJECT_STRUCTURE.md
+
+# ═══ Carpetas Solo Para Desarrolladores ═══
+docs/
+notebooks/
+tools/
+scripts/
+
+# ═══ Python Cache y Bytecode ═══
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# ═══ Entornos Virtuales (Usuarios crean el suyo) ═══
+venv/
+env/
+.venv/
+ENV/
+
+# ═══ IDEs y Editores ═══
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+.project
+.pydevproject
+
+# ═══ Archivos de Sistema Operativo ═══
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# ═══ Jupyter Notebooks ═══
+.ipynb_checkpoints/
+*.ipynb
+
+# ═══ Testing (Solo para desarrollo) ═══
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+.nox/
+coverage.xml
+*.cover
+tests/
+
+# ═══ Build Artifacts ═══
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl
+
+# ═══ Hydra Específico ═══
+EMERGENCY_STOP
+*.db
+*.sqlite
+*.sqlite3
+
+# ═══ Temporal ═══
+tmp/
+temp/
+*.tmp
+*.bak
+*~
+
+# ═══ Plataformas de Deploy ═══
+.railway/
+.render/
+
+# ═══ Node.js (Frontend) ═══
+node_modules/
+package-lock.json
+
+# ═══ Imágenes (Muy pesadas) ═══
+*.png
+*.jpg
+*.jpeg
+*.gif
+!frontend/favicon.ico
+
+# ═══ Scripts de Utilidad (Solo desarrolladores) ═══
+clean.py
+structure.py
+commit.py
+test_suite.py
+hydra_core.py

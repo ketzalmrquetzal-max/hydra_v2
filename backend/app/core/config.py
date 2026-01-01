@@ -67,7 +67,7 @@ class Settings(BaseSettings):
 
     # Límites adicionales
     max_leverage: int = Field(
-        default=5, le=10, description="Apalancamiento máximo permitido"
+        default=25, le=50, description="Apalancamiento máximo permitido (Ajustado)"
     )
 
     max_concurrent_positions: int = Field(

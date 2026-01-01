@@ -211,8 +211,8 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
 
             # --- E. VERDUGO EJECUTA (si hay señal) ---
             if (
-                accion in ["BUY", "SELL"] and confianza >= 60
-            ):  # 🎯 60% umbral para test 48h
+                accion in ["BUY", "SELL"] and confianza >= 40
+            ):  # 🎯 40% umbral para test AGRESIVO 48h (Ultima oportunidad)
                 print(f"\n🛡️ GUARDIÁN: Validando orden de {accion}...")
 
                 # Construir solicitud formal para el Guardián

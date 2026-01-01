@@ -204,6 +204,8 @@ class SupabaseConnector:
                     sum(l["confidence"] for l in trades) / total if total > 0 else 0
                 ),
             }
+        except Exception as e:
+            return {"error": str(e)}
 
     def save_state(self, state: dict) -> bool:
         """
@@ -211,20 +213,22 @@ class SupabaseConnector:
         """
         if not self.is_connected:
             return False
-            
+
         try:
             data = {
                 "id": "current_state",
                 "data": state,
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.utcnow().isoformat(),
             }
             # Solo intentar si el cliente está listo
             self.client.table("system_state").upsert(data).execute()
             return True
         except Exception as e:
             # No detener el bot si la tabla no existe, solo avisar
-            if "relation \"public.system_state\" does not exist" in str(e):
-                print("   ⚠️ Tabla 'system_state' no encontrada en Supabase. Persistencia desactivada.")
+            if 'relation "public.system_state" does not exist' in str(e):
+                print(
+                    "   ⚠️ Tabla 'system_state' no encontrada en Supabase. Persistencia desactivada."
+                )
             else:
                 print(f"   ❌ Error guardando estado: {e}")
             return False
@@ -235,14 +239,19 @@ class SupabaseConnector:
         """
         if not self.is_connected:
             return None
-            
+
         try:
-            result = self.client.table("system_state").select("data").eq("id", "current_state").execute()
+            result = (
+                self.client.table("system_state")
+                .select("data")
+                .eq("id", "current_state")
+                .execute()
+            )
             if result.data:
                 return result.data[0].get("data")
             return None
         except Exception as e:
-            if "relation \"public.system_state\" does not exist" in str(e):
+            if 'relation "public.system_state" does not exist' in str(e):
                 print("   ⚠️ No se puede cargar estado: tabla 'system_state' no existe.")
             return None
 

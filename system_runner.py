@@ -9,6 +9,7 @@ Este archivo une todos los módulos y corre el loop infinito de trading.
 import time
 import sys
 import os
+import gc
 from datetime import datetime
 
 # Agregar el directorio raíz al path
@@ -133,8 +134,6 @@ Modo: {'PRODUCCION' if os.getenv('ENV_STATE') == 'PRODUCTION' else 'LIVE TEST'}
     print("\n" + "=" * 50)
     print("   INICIANDO LOOP DE TRADING")
     print("=" * 50)
-
-    import gc  # Importar recolector de basura
 
     while True:
         try:

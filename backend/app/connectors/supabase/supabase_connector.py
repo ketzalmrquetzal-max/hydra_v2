@@ -213,17 +213,20 @@ class SupabaseConnector:
             return False
             
         try:
-            # Usar una tabla dedicada 'system_state' o similar
             data = {
                 "id": "current_state",
                 "data": state,
                 "updated_at": datetime.utcnow().isoformat()
             }
-            
+            # Solo intentar si el cliente está listo
             self.client.table("system_state").upsert(data).execute()
             return True
         except Exception as e:
-            print(f"   ❌ Error guardando estado en Supabase: {e}")
+            # No detener el bot si la tabla no existe, solo avisar
+            if "relation \"public.system_state\" does not exist" in str(e):
+                print("   ⚠️ Tabla 'system_state' no encontrada en Supabase. Persistencia desactivada.")
+            else:
+                print(f"   ❌ Error guardando estado: {e}")
             return False
 
     def load_state(self) -> Optional[dict]:
@@ -239,7 +242,8 @@ class SupabaseConnector:
                 return result.data[0].get("data")
             return None
         except Exception as e:
-            print(f"   ❌ Error cargando estado de Supabase: {e}")
+            if "relation \"public.system_state\" does not exist" in str(e):
+                print("   ⚠️ No se puede cargar estado: tabla 'system_state' no existe.")
             return None
 
 

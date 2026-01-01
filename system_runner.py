@@ -95,15 +95,32 @@ Modo: {'PRODUCCION' if os.getenv('ENV_STATE') == 'PRODUCTION' else 'LIVE TEST'}
         sys.exit(1)
 
     # ═══════════════════════════════════════════════════════════
-    # FASE 2: CONFIGURACIÓN DE TIEMPOS
+    # FASE 2: CONFIGURACIÓN Y PERSISTENCIA (Sobrevivencia)
     # ═══════════════════════════════════════════════════════════
 
     CICLO_MINUTOS = 5  # Cada cuántos minutos evaluar
     SENTINEL_CADA_CICLOS = 12  # Sentinel cada hora (12 ciclos de 5 min)
 
+    # Valores por defecto
     ciclo_actual = 0
     ultimo_reporte_sentinel = "Esperando primer escaneo..."
     total_trades = 0
+
+    # Intentar cargar estado desde Supabase
+    if balam.memory and balam.memory.is_connected:
+        print("\n☁️ Cargando estado desde la nube...")
+        state = balam.memory.load_state()
+        if state:
+            ciclo_actual = state.get("ciclo_actual", 0)
+            total_trades = state.get("total_trades", 0)
+            ultimo_reporte_sentinel = state.get(
+                "ultimo_reporte", ultimo_reporte_sentinel
+            )
+            print(
+                f"   ✅ Estado restaurado: Ciclo #{ciclo_actual} | Trades: {total_trades}"
+            )
+        else:
+            print("   ℹ️ No se encontró estado previo. Iniciando desde cero.")
 
     print(f"\n⏰ Configuración:")
     print(f"   Ciclo de evaluación: cada {CICLO_MINUTOS} minutos")
@@ -117,10 +134,13 @@ Modo: {'PRODUCCION' if os.getenv('ENV_STATE') == 'PRODUCTION' else 'LIVE TEST'}
     print("   INICIANDO LOOP DE TRADING")
     print("=" * 50)
 
+    import gc  # Importar recolector de basura
+
     while True:
         try:
             ciclo_actual += 1
             inicio_ciclo = time.time()
+            gc.collect()  # Liberar memoria al inicio de cada ciclo
 
             print(f"\n{'='*50}")
             print(f"   CICLO #{ciclo_actual}")
@@ -148,6 +168,16 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
                     )
                 except Exception as e:
                     print(f"   ⚠️ Error en Sentinel: {e}")
+
+                # Persistir estado tras reporte (aunque falle, para no entrar en loop infinito de Sentinel)
+                if balam.memory and balam.memory.is_connected:
+                    balam.memory.save_state(
+                        {
+                            "ciclo_actual": ciclo_actual,
+                            "total_trades": total_trades,
+                            "ultimo_reporte": ultimo_reporte_sentinel,
+                        }
+                    )
 
             # --- B. OBTENER VELAS (Simuladas por ahora) ---
             print("\n📊 Obteniendo datos de mercado...")
@@ -236,6 +266,18 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
             duracion = time.time() - inicio_ciclo
             print(f"\n⏱️ Ciclo completado en {duracion:.2f}s")
             print(f"📊 Trades totales: {total_trades}")
+
+            # Guardar estado cada ciclo (liviano)
+            if balam.memory and balam.memory.is_connected:
+                balam.memory.save_state(
+                    {
+                        "ciclo_actual": ciclo_actual,
+                        "total_trades": total_trades,
+                        "ultimo_reporte": ultimo_reporte_sentinel[
+                            :1000
+                        ],  # Limitar tamaño persistido
+                    }
+                )
 
             # --- G. ESPERAR SIGUIENTE CICLO ---
             print(f"\n💤 Esperando {CICLO_MINUTOS} minutos...")

@@ -128,23 +128,18 @@ class SentinelService:
     def _enviar_a_dashboard(self, mensaje: str):
         """
         Envía logs al Dashboard para visualización en tiempo real.
-
-        Args:
-            mensaje: Texto del reporte o log a enviar
         """
+        # Optimización: Reducir tamaño del mensaje enviado
+        msg_short = mensaje[:200] + "..." if len(mensaje) > 200 else mensaje
         try:
             payload = {
                 "timestamp": datetime.now().strftime("%H:%M:%S"),
                 "source": "SENTINEL",
-                "message": mensaje,
+                "message": msg_short,
             }
-            # Enviar al servidor FastAPI local
-            requests.post("http://localhost:8000/api/log", json=payload, timeout=1)
-        except requests.exceptions.ConnectionError:
-            # Dashboard no está corriendo, ignorar silenciosamente
+            requests.post("http://localhost:8000/api/log", json=payload, timeout=0.5)
+        except:
             pass
-        except Exception as e:
-            print(f"⚠️ No se pudo enviar al dashboard: {e}")
 
     def _describe_sentiment(self, score: float) -> str:
         """Convierte el score numérico a descripción legible"""

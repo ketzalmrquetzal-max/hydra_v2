@@ -205,8 +205,42 @@ class SupabaseConnector:
                 ),
             }
 
+    def save_state(self, state: dict) -> bool:
+        """
+        Guarda el estado del sistema para persistencia entre reinicios.
+        """
+        if not self.is_connected:
+            return False
+            
+        try:
+            # Usar una tabla dedicada 'system_state' o similar
+            data = {
+                "id": "current_state",
+                "data": state,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            self.client.table("system_state").upsert(data).execute()
+            return True
         except Exception as e:
-            return {"error": str(e)}
+            print(f"   ❌ Error guardando estado en Supabase: {e}")
+            return False
+
+    def load_state(self) -> Optional[dict]:
+        """
+        Carga el último estado guardado del sistema.
+        """
+        if not self.is_connected:
+            return None
+            
+        try:
+            result = self.client.table("system_state").select("data").eq("id", "current_state").execute()
+            if result.data:
+                return result.data[0].get("data")
+            return None
+        except Exception as e:
+            print(f"   ❌ Error cargando estado de Supabase: {e}")
+            return None
 
 
 # Test directo

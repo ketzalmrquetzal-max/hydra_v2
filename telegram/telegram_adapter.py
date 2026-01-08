@@ -77,58 +77,89 @@ class TelegramAdapter:
             self.bot.send_chat_action(message.chat.id, "typing")
             try:
                 if self.verdugo:
-                    saldo = self.verdugo.obtener_saldo()
+                    # Usar nueva función para detalles completos
+                    info = self.verdugo.obtener_info_cuenta()
+
+                    # Soporte para estructura Mock y Real (Binance suele dar 'balances')
+                    saldo_total = 0.0
+                    saldo_usdt = 0.0
+
+                    # Normalizar datos (Mock usa keys específicas, Binance usa otras)
+                    if "totalWalletBalance" in info:  # MockExchange
+                        saldo_total = float(info.get("totalWalletBalance", 0))
+                        saldo_usdt = float(info.get("availableBalance", 0))
+                        positions = info.get("positions", {})
+                    else:  # Fallback genérico o Binance Real
+                        saldo_usdt = self.verdugo.obtener_saldo()
+                        saldo_total = saldo_usdt
+                        positions = {}
+
                     mode_str = (
                         "🔓 Modo Simulado"
                         if hasattr(self.verdugo, "mode")
                         and self.verdugo.mode != "PRODUCTION"
                         else "🔐 Modo REAL"
                     )
+
                     msg = (
                         f"💰 **BÓVEDA DE HYDRA**\n"
-                        f"Saldo Disponible: `${saldo:.2f} USDT`\n"
-                        f"Estado: {mode_str}"
+                        f"💵 Saldo USDT: `${saldo_usdt:,.2f}`\n"
+                        f"🏦 Patrimonio Total: `${saldo_total:,.2f}`\n"
+                        f"Estado: {mode_str}\n\n"
+                        f"🪙 **PORTAFOLIO:**\n"
                     )
+
+                    activos_encontrados = False
+                    for symbol, data in positions.items():
+                        qty = float(data.get("qty", 0))
+                        if qty > 0:
+                            entry = float(data.get("entry_price", 0))
+                            msg += f"• **{symbol}**: `{qty:.5f}` (Avg: ${entry:,.2f})\n"
+                            activos_encontrados = True
+
+                    if not activos_encontrados:
+                        msg += "_Sin activos en cartera_"
+
                 else:
                     msg = "⚠️ Verdugo no disponible."
             except Exception as e:
+                print(f"Error en /balance: {e}")
                 msg = f"❌ Error consultando banco: {e}"
             self.bot.reply_to(message, msg, parse_mode="Markdown")
 
-        @self.bot.message_handler(commands=["info"])
-        def system_info(message):
-            state = os.getenv("ENV_STATE", "UNKNOWN")
-            msg = (
-                "🛡️ **ESTADO DEL SISTEMA**\n"
-                "✅ Sentinela: ACTIVO\n"
-                "✅ Balam V2: ONLINE\n"
-                "✅ Verdugo: LISTO\n"
-                "✅ Base de Datos: CONECTADA\n"
-                f"🚀 Servidor: {state}"
-            )
-            self.bot.reply_to(message, msg)
-
         @self.bot.message_handler(commands=["visual"])
         def send_chart(message):
+            """Genera y envía gráfico de velas actual"""
             self.bot.send_chat_action(message.chat.id, "upload_photo")
             try:
                 if self.verdugo and self.verdugo.connector:
+                    candles = []
+                    # Detectar método correcto según conector (Mock o Real)
                     if hasattr(self.verdugo.connector, "get_latest_candles"):
-                        candles = self.verdugo.connector.get_latest_candles()
+                        # Intentar con argumentos (Binance) o sin ellos (Mock)
+                        try:
+                            candles = self.verdugo.connector.get_latest_candles(
+                                symbol="BTCUSDT", interval="5m", limit=50
+                            )
+                        except TypeError:
+                            candles = self.verdugo.connector.get_latest_candles(
+                                symbol="BTCUSDT"
+                            )
+
+                    if candles:
                         foto = self.painter.generar_grafico(candles)
                         self.bot.send_photo(
                             message.chat.id,
                             foto,
-                            caption="📊 **VISTA ACTUAL DE BALAM**",
+                            caption="📊 **VISTA DE MERCADO (BTC/USDT)**",
                         )
                     else:
-                        self.bot.reply_to(
-                            message, "⚠️ El conector actual no soporta gráficos."
-                        )
+                        self.bot.reply_to(message, "⚠️ No pude obtener datos de velas.")
                 else:
                     self.bot.reply_to(message, "⚠️ Verdugo desconectado.")
             except Exception as e:
-                self.bot.reply_to(message, f"❌ No pude generar la foto: {e}")
+                print(f"Error generando visual: {e}")
+                self.bot.reply_to(message, f"❌ Error generando gráfico: {e}")
 
     def iniciar_escucha(self):
         """Inicia el bot en un hilo separado para no bloquear el trading"""

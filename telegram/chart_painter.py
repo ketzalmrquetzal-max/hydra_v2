@@ -72,7 +72,8 @@ class ChartPainter:
 
         # 5. Guardar en Memoria
         buf = io.BytesIO()
-        plt.savefig(buf, format="png", bbox_inches="tight")
+        # Usar formato explícito y sin tight_layout para evitar warnings en headless
+        plt.savefig(buf, format="png")
         buf.seek(0)
         plt.close(fig)
 

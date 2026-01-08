@@ -22,14 +22,14 @@ class MockExchange:
     - Tu dinero real permanece intacto
     """
 
-    def __init__(self, initial_balance: float = 10.0):
+    def __init__(self, initial_balance: float = 40.0):
         """
         Inicializa el simulador con dinero de Monopoly.
 
         Args:
-            initial_balance: Saldo inicial en USDT (default: $10 para prueba)
+            initial_balance: Saldo inicial en USDT (default: $40 - capital real del usuario)
         """
-        print("💰 EXCHANGE CONECTADO (Modo Live)")
+        print("💰 EXCHANGE CONECTADO (Modo Simulación)")
         print(f"   💵 Saldo disponible: ${initial_balance:.2f} USDT")
 
         self.usdt_balance = initial_balance
@@ -134,10 +134,17 @@ class MockExchange:
             # Actualizar posición y precio promedio de entrada
             current_pos = self.positions.get(symbol, {"qty": 0.0, "entry_price": 0.0})
             total_qty = current_pos["qty"] + quantity
-            # Nuevo precio promedio ponderado
-            avg_price = (
-                (current_pos["qty"] * current_pos["entry_price"]) + (quantity * price)
-            ) / total_qty
+
+            # Nuevo precio promedio ponderado (con validación para evitar división por cero)
+            if total_qty > 0:
+                avg_price = (
+                    (current_pos["qty"] * current_pos["entry_price"])
+                    + (quantity * price)
+                ) / total_qty
+            else:
+                avg_price = (
+                    price  # Si no hay cantidad previa, el precio promedio es el actual
+                )
 
             self.positions[symbol] = {"qty": total_qty, "entry_price": avg_price}
 

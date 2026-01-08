@@ -84,6 +84,14 @@ class Executioner:
             print(f"❌ Error leyendo saldo: {e}")
             return 0.0
 
+    def obtener_info_cuenta(self) -> dict:
+        """Obtiene detalles completos de la cuenta (saldo + posiciones)"""
+        try:
+            return self.connector.get_account_info()
+        except Exception as e:
+            print(f"❌ Error leyendo info cuenta: {e}")
+            return {}
+
     def ejecutar_disparo(self, orden: dict) -> dict:
         """
         Recibe la orden de Balam y aprieta el gatillo.

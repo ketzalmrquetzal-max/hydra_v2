@@ -13,6 +13,8 @@ sys.path.insert(
 
 from .technical_analyst import TechnicalAnalyst
 from .evidence_generator import EvidenceGenerator
+from backend.app.services.sentinel.gemini_http_client import GeminiHTTPClient
+from backend.app.core.config import get_settings
 
 # Importar memoria en la nube (opcional)
 try:
@@ -43,7 +45,11 @@ class BalamBrain:
         self.analyst = TechnicalAnalyst()
         self.artist = EvidenceGenerator()
 
-        # Inicializar memoria en la nube
+        # Inicializar cliente AI
+        settings = get_settings()
+        self.ai_client = GeminiHTTPClient(api_key=settings.gemini_api_key)
+
+        # Inicializar memoria
         self.memory = None
         if enable_cloud_memory and SUPABASE_AVAILABLE:
             try:
@@ -52,6 +58,54 @@ class BalamBrain:
                 print(f"   ⚠️ Memoria en nube no disponible: {e}")
 
         print("   ✅ Componentes cargados")
+
+    def _analyze_with_gemini(
+        self, symbol: str, technical_data: dict, sentinel_report: str, trend: str
+    ) -> dict:
+        """
+        Consulta a Gemini para obtener una decisión de trading basada en datos.
+        """
+        prompt = f"""
+ACTÚA COMO: Un Trader Institucional de Elite (Balam).
+TAREA: Analizar datos técnicos y de sentimiento para decidir una operación en {symbol}.
+
+DATOS TÉCNICOS:
+- Precio: ${technical_data.get('price')}
+- Tendencia: {trend}
+- RSI: {technical_data.get('rsi')} (Sobreventa < 30, Sobrecompra > 70)
+- Bandas Bollinger: {technical_data.get('bb_lower')} (Inf) - {technical_data.get('bb_upper')} (Sup)
+- ADX: {technical_data.get('adx')} (Fuerza de la tendencia)
+
+SENTIMIENTO DE MERCADO (Del Centinela):
+"{sentinel_report}"
+
+TU MISIÓN:
+Decidir si COMPRAR (BUY), VENDER (SELL) o ESPERAR (HOLD).
+- Sé agresivo si la tendencia acompaña.
+- Sé cauteloso si hay contradicciones.
+- Tu confianza debe ser precisa (0-100%).
+
+RESPONDE ÚNICAMENTE CON ESTE JSON (SIN MARKDOWN):
+{{
+    "action": "BUY/SELL/HOLD",
+    "confidence": 85,
+    "reason": "Explicación breve y técnica de por qué tomaste esta decisión."
+}}
+"""
+        try:
+            response = self.ai_client.generate_content(prompt, temperature=0.2)
+            # Limpiar respuesta para obtener JSON puro
+            json_str = response.replace("```json", "").replace("```", "").strip()
+            import json
+
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"   ⚠️ Error en cerebro AI: {e}")
+            return {
+                "action": "HOLD",
+                "confidence": 0,
+                "reason": "Fallo en IA, manteniendo posición.",
+            }
 
     def evaluate_market(self, symbol: str, candles: list, sentinel_report: str) -> dict:
         """
@@ -146,149 +200,46 @@ class BalamBrain:
             tendencia = "BAJISTA"
 
         # ═══════════════════════════════════════════════════════════
-        # FASE 3: LÓGICA DE DECISIÓN "FRANCOTIRADOR"
+        # FASE 3: CONSULTA A LA INTELIGENCIA ARTIFICIAL (NUEVO CEREBRO)
         # ═══════════════════════════════════════════════════════════
 
-        decision = "HOLD"
-        confidence = 0
-        razon = "Esperando alineación perfecta..."
+        technical_summary = {
+            "price": precio,
+            "rsi": rsi,
+            "adx": adx,
+            "ema_50": ema_50,
+            "bb_upper": bb_upper,
+            "bb_lower": bb_lower,
+            "is_lateral": is_lateral_market,
+        }
 
-        # --- CASO DE COMPRA (LONG) ---
-        # Estrategia: Rebote en Tendencia Alcista
-        # Regla 1: Tendencia Alcista (Precio arriba de EMA 50 y EMA 200)
-        # Regla 2: RSI < 35 (Sobreventa temporal)
-        # Regla 3: Precio cerca de banda inferior de Bollinger
-
-        if tendencia == "ALCISTA" and rsi < 35:
-            decision = "BUY"
-            confidence = 80
-            razon = f"Pullback en tendencia alcista + RSI sobreventa ({rsi:.1f})"
-
-            # Bonus: Precio tocando banda inferior
-            if precio <= bb_lower * 1.01:
-                confidence += 10
-                razon += " + Tocando Bollinger inferior"
-
-            # Bonus: MACD cruzando hacia arriba
-            if macd > macd_signal and macd < 0:
-                confidence += 5
-                razon += " + MACD alcista"
-
-        # Regla alternativa: RSI extremadamente bajo en cualquier tendencia
-        elif rsi < 25 and precio > ema_200:
-            decision = "BUY"
-            confidence = 75
-            razon = f"RSI extremo ({rsi:.1f}) + Arriba de EMA200"
-
-        # --- CASO DE VENTA (SHORT) ---
-        # Regla 1: Tendencia Bajista
-        # Regla 2: RSI > 65 (Sobrecompra temporal)
-
-        elif tendencia == "BAJISTA" and rsi > 65:
-            decision = "SELL"
-            confidence = 80
-            razon = f"Rally en tendencia bajista + RSI sobrecompra ({rsi:.1f})"
-
-            # Bonus: Precio tocando banda superior
-            if precio >= bb_upper * 0.99:
-                confidence += 10
-                razon += " + Tocando Bollinger superior"
-
-            # Bonus: MACD cruzando hacia abajo
-            if macd < macd_signal and macd > 0:
-                confidence += 5
-                razon += " + MACD bajista"
-
-        # Regla alternativa: RSI extremadamente alto
-        elif rsi > 75 and precio < ema_200:
-            decision = "SELL"
-            confidence = 75
-            razon = f"RSI extremo ({rsi:.1f}) + Debajo de EMA200"
-
-        # ═══════════════════════════════════════════════════════════
-        # FASE 4: AJUSTE POR CONTEXTO DEL SENTINELA
-        # ═══════════════════════════════════════════════════════════
-
-        # Convertir sentinel_report a string si es dict
-        if isinstance(sentinel_report, dict):
-            sentinel_report = str(sentinel_report.get("summary", sentinel_report))
-
-        sentinel_upper = sentinel_report.upper() if sentinel_report else ""
-
-        # Detectar sentimiento del Sentinela
-        sentimiento_negativo = any(
-            word in sentinel_upper
-            for word in [
-                "PÁNICO",
-                "PANICO",
-                "MIEDO",
-                "FEAR",
-                "-0.8",
-                "-0.9",
-                "-1.0",
-                "EXTREME FEAR",
-            ]
-        )
-        sentimiento_positivo = any(
-            word in sentinel_upper
-            for word in [
-                "EUFORIA",
-                "CODICIA",
-                "GREED",
-                "0.8",
-                "0.9",
-                "1.0",
-                "EXTREME GREED",
-            ]
+        print("   🤖 Consultando a Gemini (Balam AI)...")
+        # Aseguramos que sentinel_report sea string
+        report_str = (
+            str(sentinel_report) if sentinel_report else "Sin reporte disponible"
         )
 
-        if decision == "BUY":
-            if sentimiento_negativo:
-                # Comprar cuando hay pánico (contrarian) si tendencia es alcista
-                confidence += 10
-                razon += " + Comprando en pánico (contrarian)"
-            elif sentimiento_positivo:
-                # Peligroso comprar en euforia
-                confidence -= 25
-                if confidence < 60:
-                    decision = "HOLD"
-                    razon = "Cancelado: Euforia detectada, riesgo alto"
+        ai_decision = self._analyze_with_gemini(
+            symbol, technical_summary, report_str, tendencia
+        )
 
-        elif decision == "SELL":
-            if sentimiento_positivo:
-                # Vender en euforia (contrarian)
-                confidence += 10
-                razon += " + Vendiendo en euforia (contrarian)"
-            elif sentimiento_negativo:
-                # Peligroso vender en pánico (ya bajó)
-                confidence -= 20
-                if confidence < 60:
-                    decision = "HOLD"
-                    razon = "Cancelado: Pánico ya instalado, tarde para vender"
+        decision = ai_decision.get("action", "HOLD").upper()
+        confidence = ai_decision.get("confidence", 0)
+        razon = ai_decision.get("reason", "Decisión calculada por AI")
 
         # ═══════════════════════════════════════════════════════════
-        # FASE 4.5: FILTRO ANTI-WHIPSAW (MERCADO LATERAL)
+        # FASE 4: FILTRO DE SEGURIDAD (RESPALDO HUMANO)
         # ═══════════════════════════════════════════════════════════
 
-        if decision != "HOLD" and is_lateral_market:
-            original_decision = decision
+        # Umbral mínimo duro (Hard Floor)
+        # Incluso si la AI dice "Compra segura", si la confianza es < 40%, no disparamos.
+        if decision != "HOLD" and confidence < 40:
             decision = "HOLD"
+            razon += " (Cancelado por confianza < 40%)"
             confidence = 40
-            razon = f"BLOQUEADO: Mercado lateral detectado (ADX {adx:.1f} < {ADX_THRESHOLD}). Riesgo de whipsaw. Señal original: {original_decision}"
 
         # ═══════════════════════════════════════════════════════════
-        # FASE 5: UMBRAL MÍNIMO DE CONFIANZA
-        # ═══════════════════════════════════════════════════════════
-
-        if decision != "HOLD" and confidence < 50:
-            decision = "HOLD"
-            razon = (
-                f"Confianza insuficiente ({confidence}%), manteniendo postura neutral"
-            )
-            confidence = 50
-
-        # ═══════════════════════════════════════════════════════════
-        # FASE 6: GENERAR EVIDENCIA VISUAL
+        # FASE 5: GENERAR EVIDENCIA VISUAL
         # ═══════════════════════════════════════════════════════════
 
         expediente = {
@@ -323,7 +274,7 @@ class BalamBrain:
             expediente["evidence_error"] = str(e)
 
         # ═══════════════════════════════════════════════════════════
-        # FASE 7: GUARDAR EN LA NUBE (SI ES BUY O SELL)
+        # FASE 6: GUARDAR EN LA NUBE (SI ES BUY O SELL)
         # ═══════════════════════════════════════════════════════════
 
         if (decision in ["BUY", "SELL"] or confidence > 40) and self.memory is not None:

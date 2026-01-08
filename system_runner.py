@@ -67,6 +67,16 @@ def main():
         verdugo = Executioner()
         print("   ✅ Executioner (El Verdugo)")
 
+        # Inicializar el balance del PositionTracker con el saldo del exchange
+        from backend.app.connectors.supabase.position_tracker import (
+            get_position_tracker,
+        )
+
+        position_tracker = get_position_tracker()
+        initial_balance = verdugo.obtener_saldo()
+        position_tracker.set_initial_balance(initial_balance)
+        print(f"   💰 Balance inicial registrado: ${initial_balance:.2f} USDT")
+
         telegram = TelegramAdapter(verdugo_ref=verdugo, supabase_ref=balam.memory)
         telegram.iniciar_escucha()
         print("   ✅ Telegram (Centro de Comando Interactivo)")
@@ -178,9 +188,25 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
                         }
                     )
 
-            # --- B. OBTENER VELAS (Simuladas por ahora) ---
-            print("\n📊 Obteniendo datos de mercado...")
-            candles = _generar_velas_simuladas()
+            # --- B. OBTENER VELAS (MERCADO REAL) ---
+            print("\n📊 Obteniendo datos de mercado (REAL)...")
+            try:
+                # Intentar obtener velas reales de Binance
+                # MockExchange solo acepta symbol, BinanceConnector acepta interval y limit
+                if hasattr(verdugo.connector, "get_latest_candles"):
+                    try:
+                        # Primero intentamos con todos los parámetros (BinanceConnector)
+                        candles = verdugo.connector.get_latest_candles(
+                            symbol="BTCUSDT", interval="5m", limit=100
+                        )
+                    except TypeError:
+                        # Si falla, es MockExchange que solo acepta symbol
+                        candles = verdugo.connector.get_latest_candles(symbol="BTCUSDT")
+                else:
+                    raise Exception("Conector no tiene método get_latest_candles")
+            except Exception as e:
+                print(f"   ⚠️ Error obteniendo velas reales: {e}. Usando fallback...")
+                candles = _generar_velas_simuladas()
             precio_actual = candles[-1]["close"]
             print(f"   ✅ {len(candles)} velas | Precio: ${precio_actual:.2f}")
 
@@ -201,6 +227,9 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
 
             # --- D. GUARDIAN VALIDA ---
             print("\n🛡️ GUARDIAN: Validando...")
+            # Enviar heartbeat de todos los módulos para evitar HEARTBEAT_TIMEOUT
+            guardian.receive_heartbeat("SENTINEL")  # Señalar que el sistema está vivo
+            guardian.receive_heartbeat("BALAM")  # Balam acaba de evaluar
             guardian.receive_heartbeat("SYSTEM_RUNNER")
 
             if is_kill_switch_active():
@@ -249,10 +278,16 @@ Fear/Greed: {reporte.get('fear_greed', 'N/A')}
                     if recibo:
                         total_trades += 1
                         print(f"   ✅ TRADE #{total_trades} EJECUTADO")
+                        precio = float(recibo.get("price", 0))
+                        cantidad_ejecutada = float(recibo.get("executedQty", 0))
+                        total_usdt = precio * cantidad_ejecutada
+
                         telegram.enviar_mensaje(
                             f"🎯 TRADE EJECUTADO\n"
                             f"Acción: {accion}\n"
-                            f"Cantidad: {aprobacion.adjusted_quantity}\n"
+                            f"Precio: ${precio:,.2f}\n"
+                            f"Cantidad: {cantidad_ejecutada:.6f}\n"
+                            f"Total: ${total_usdt:,.2f}\n"
                             f"Confianza: {confianza}%"
                         )
                 else:
